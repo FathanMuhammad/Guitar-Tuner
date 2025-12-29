@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acoustic Guitar Tuner</title>
+    <title>ProGuitar Tuner</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,13 +15,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Lucide icons as inline SVG components
-        const Music = ({ className }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
-        );
-
+        // Lucide icons as inline SVG
         const Mic = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -49,7 +43,6 @@
           const [cents, setCents] = useState(0);
           const [closestString, setClosestString] = useState('');
           const [error, setError] = useState('');
-          const [permissionStatus, setPermissionStatus] = useState('prompt');
           
           const audioContextRef = useRef(null);
           const analyserRef = useRef(null);
@@ -58,12 +51,12 @@
           const streamRef = useRef(null);
 
           const guitarStrings = [
-            { name: 'E', frequency: 82.41, string: '6th (Low E)' },
-            { name: 'A', frequency: 110.00, string: '5th (A)' },
-            { name: 'D', frequency: 146.83, string: '4th (D)' },
-            { name: 'G', frequency: 196.00, string: '3rd (G)' },
-            { name: 'B', frequency: 246.94, string: '2nd (B)' },
-            { name: 'E', frequency: 329.63, string: '1st (High E)' }
+            { name: 'E', frequency: 82.41, string: 'E₂', position: 6 },
+            { name: 'A', frequency: 110.00, string: 'A₂', position: 5 },
+            { name: 'D', frequency: 146.83, string: 'D₃', position: 4 },
+            { name: 'G', frequency: 196.00, string: 'G₃', position: 3 },
+            { name: 'B', frequency: 246.94, string: 'B₃', position: 2 },
+            { name: 'E', frequency: 329.63, string: 'E₄', position: 1 }
           ];
 
           const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -158,7 +151,6 @@
           const startListening = async () => {
             try {
               setError('');
-              console.log('Requesting microphone access...');
               
               if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Microphone access not supported in this browser');
@@ -172,9 +164,7 @@
                 } 
               });
               
-              console.log('Microphone access granted');
               streamRef.current = stream;
-              setPermissionStatus('granted');
               
               const AudioContext = window.AudioContext || window.webkitAudioContext;
               if (!AudioContext) {
@@ -188,17 +178,15 @@
               analyserRef.current.fftSize = 4096;
               microphoneRef.current.connect(analyserRef.current);
               
-              console.log('Audio processing started');
               setIsListening(true);
               detectPitch();
             } catch (err) {
               console.error('Error accessing microphone:', err);
-              setPermissionStatus('denied');
               
               if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                setError('Microphone access denied. Please allow microphone permission in your browser settings.');
+                setError('Microphone access denied. Please allow microphone permission.');
               } else if (err.name === 'NotFoundError') {
-                setError('No microphone found. Please connect a microphone and try again.');
+                setError('No microphone found. Please connect a microphone.');
               } else {
                 setError(`Error: ${err.message}`);
               }
@@ -206,8 +194,6 @@
           };
 
           const stopListening = () => {
-            console.log('Stopping tuner...');
-            
             if (rafIdRef.current) {
               cancelAnimationFrame(rafIdRef.current);
             }
@@ -234,66 +220,155 @@
             };
           }, []);
 
-          const getTuningColor = () => {
-            if (Math.abs(cents) < 5) return 'text-green-600';
-            if (Math.abs(cents) < 20) return 'text-amber-600';
-            return 'text-red-700';
-          };
-
-          const getTuningMessage = () => {
-            if (Math.abs(cents) < 5) return 'In Tune!';
-            if (cents > 0) return 'Too Sharp';
-            return 'Too Flat';
-          };
+          const needleRotation = Math.max(-50, Math.min(50, cents));
 
           return (
-            <div className="min-h-screen bg-gradient-to-br from-amber-100 via-orange-50 to-yellow-100 flex items-center justify-center p-4">
-              <div className="relative max-w-md w-full">
-                {/* Wood grain texture background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900 rounded-3xl transform rotate-1"></div>
-                <div className="absolute inset-0 bg-gradient-to-tr from-amber-900 via-amber-800 to-amber-700 rounded-3xl transform -rotate-1"></div>
-                
-                <div className="relative bg-gradient-to-br from-amber-700 via-yellow-800 to-amber-900 rounded-3xl shadow-2xl p-8 border-4 border-amber-950" style={{
-                  boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.4)'
-                }}>
-                  {/* Decorative corner pieces */}
-                  <div className="absolute top-4 left-4 w-8 h-8 border-t-4 border-l-4 border-yellow-600 opacity-40"></div>
-                  <div className="absolute top-4 right-4 w-8 h-8 border-t-4 border-r-4 border-yellow-600 opacity-40"></div>
-                  <div className="absolute bottom-4 left-4 w-8 h-8 border-b-4 border-l-4 border-yellow-600 opacity-40"></div>
-                  <div className="absolute bottom-4 right-4 w-8 h-8 border-b-4 border-r-4 border-yellow-600 opacity-40"></div>
-
-                  <div className="flex items-center justify-center mb-8">
-                    <Music className="w-10 h-10 text-yellow-300 mr-3" />
-                    <h1 className="text-4xl font-bold text-yellow-100" style={{
-                      textShadow: '2px 2px 4px rgba(0,0,0,0.5), 0 0 10px rgba(251, 191, 36, 0.3)',
-                      fontFamily: 'serif'
-                    }}>Acoustic Tuner</h1>
+            <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black flex flex-col">
+              {/* Top Section - Analog Meter */}
+              <div className="bg-gradient-to-b from-amber-100 to-amber-50 p-6 relative">
+                <div className="max-w-md mx-auto">
+                  {/* Meter Scale */}
+                  <div className="relative h-48">
+                    <svg viewBox="0 0 200 120" className="w-full">
+                      {/* Scale arc */}
+                      <path
+                        d="M 20 100 A 80 80 0 0 1 180 100"
+                        fill="none"
+                        stroke="#333"
+                        strokeWidth="0.5"
+                      />
+                      
+                      {/* Scale marks */}
+                      {[-40, -30, -20, -10, 0, 10, 20, 30, 40].map((val, i) => {
+                        const angle = (val / 50) * 70 - 90;
+                        const rad = (angle * Math.PI) / 180;
+                        const x1 = 100 + 75 * Math.cos(rad);
+                        const y1 = 100 + 75 * Math.sin(rad);
+                        const x2 = 100 + 70 * Math.cos(rad);
+                        const y2 = 100 + 70 * Math.sin(rad);
+                        
+                        return (
+                          <g key={val}>
+                            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="1" />
+                            <text
+                              x={100 + 62 * Math.cos(rad)}
+                              y={100 + 62 * Math.sin(rad)}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize="6"
+                              fill="#333"
+                            >
+                              {val > 0 ? `+${val}` : val}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      
+                      {/* Needle */}
+                      <g transform={`rotate(${needleRotation} 100 100)`}>
+                        <line x1="100" y1="100" x2="100" y2="35" stroke="#333" strokeWidth="2" />
+                        <circle cx="100" cy="100" r="3" fill="#333" />
+                      </g>
+                      
+                      {/* Center text */}
+                      <text x="100" y="80" textAnchor="middle" fontSize="12" fill="#333" fontStyle="italic" fontFamily="serif">
+                        Pro Guitar Tuner
+                      </text>
+                      
+                      {/* Cent label */}
+                      <text x="25" y="105" fontSize="5" fill="#666">cent</text>
+                    </svg>
                   </div>
 
-                  {error && (
-                    <div className="mb-6 bg-red-900 border-2 border-red-950 rounded-lg p-4 flex items-start shadow-inner">
-                      <AlertCircle className="w-5 h-5 text-red-300 mr-3 flex-shrink-0 mt-0.5" />
-                      <p className="text-red-100 text-sm">{error}</p>
-                    </div>
-                  )}
+                  {/* Red indicator light */}
+                  <div className="flex justify-center mb-4">
+                    <div className={`w-16 h-16 rounded-full border-4 border-gray-800 shadow-inner transition-all ${
+                      isListening && Math.abs(cents) < 5 
+                        ? 'bg-gradient-to-br from-green-400 to-green-600 shadow-green-500' 
+                        : isListening 
+                          ? 'bg-gradient-to-br from-red-500 to-red-700 shadow-red-500'
+                          : 'bg-gray-600'
+                    }`} style={{
+                      boxShadow: isListening ? '0 0 20px currentColor, inset 0 2px 10px rgba(0,0,0,0.3)' : 'inset 0 2px 10px rgba(0,0,0,0.3)'
+                    }}></div>
+                  </div>
+                </div>
+              </div>
 
-                  <div className="mb-8 text-center">
+              {/* Middle Section - Note Display */}
+              <div className="bg-gradient-to-b from-red-900 to-red-950 p-4">
+                <div className="max-w-md mx-auto">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-amber-200 italic font-serif">Note wheel</div>
+                  </div>
+                  
+                  <div className="bg-amber-100 rounded-lg p-4 border-4 border-amber-900 flex items-center justify-center">
+                    <div className="text-6xl font-bold text-amber-900" style={{fontFamily: 'serif'}}>
+                      {note || '-'}
+                    </div>
+                  </div>
+
+                  {/* Decorative dots */}
+                  <div className="flex justify-center gap-2 mt-4">
+                    {[...Array(15)].map((_, i) => (
+                      <div key={i} className="w-3 h-3 rounded-full bg-gray-700 border border-gray-600"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Section - Guitar Fretboard */}
+              <div className="flex-1 bg-gradient-to-b from-gray-900 to-black p-4">
+                <div className="max-w-md mx-auto">
+                  <div className="text-center mb-4">
+                    <h2 className="text-3xl font-bold text-white" style={{fontFamily: 'serif'}}>
+                      ProGuitar
+                    </h2>
+                  </div>
+
+                  {/* Fretboard */}
+                  <div className="relative bg-gradient-to-b from-amber-900 to-amber-950 rounded-lg p-4 border-4 border-gray-800">
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 text-xs text-gray-400 writing-mode-vertical transform -rotate-180 ml-1">
+                      Standard Guitar<br/>Standard Tuning
+                    </div>
+                    
+                    <div className="ml-8 space-y-3">
+                      {guitarStrings.slice().reverse().map((string, idx) => (
+                        <div key={idx} className="relative">
+                          {/* String line */}
+                          <div className="h-1 bg-gray-400 rounded relative">
+                            {/* Fret markers */}
+                            <div className="absolute left-1/4 top-1/2 -translate-y-1/2 w-1 h-8 bg-gray-300"></div>
+                            <div className="absolute right-1/4 top-1/2 -translate-y-1/2 w-1 h-8 bg-gray-300"></div>
+                          </div>
+                          
+                          {/* Note button */}
+                          <div className={`absolute left-12 top-1/2 -translate-y-1/2 px-4 py-1 rounded-full font-bold text-sm transition-all ${
+                            closestString === string.string
+                              ? 'bg-amber-500 text-white scale-110 shadow-lg'
+                              : 'bg-gray-500 text-gray-200'
+                          }`}>
+                            {string.string}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Control Button */}
+                  <div className="flex justify-center mt-6 pb-4">
                     <button
                       onClick={isListening ? stopListening : startListening}
                       className={`${
                         isListening 
-                          ? 'bg-gradient-to-b from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 border-red-950' 
-                          : 'bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 border-amber-950'
-                      } text-yellow-50 font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105 flex items-center justify-center mx-auto shadow-lg border-4`}
-                      style={{
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-                        fontFamily: 'serif'
-                      }}
+                          ? 'bg-red-600 hover:bg-red-700' 
+                          : 'bg-green-600 hover:bg-green-700'
+                      } text-white font-bold py-3 px-8 rounded-full transition-all transform hover:scale-105 flex items-center shadow-lg`}
                     >
                       {isListening ? (
                         <>
                           <MicOff className="w-6 h-6 mr-2" />
-                          Stop Listening
+                          Stop Tuning
                         </>
                       ) : (
                         <>
@@ -304,84 +379,10 @@
                     </button>
                   </div>
 
-                  {isListening && (
-                    <div className="space-y-6">
-                      <div className="bg-gradient-to-br from-yellow-50 to-amber-100 rounded-2xl p-6 text-center border-4 border-amber-900 shadow-inner">
-                        <div className="text-7xl font-bold mb-2" style={{
-                          color: '#78350f',
-                          textShadow: '3px 3px 0px rgba(217, 119, 6, 0.3)',
-                          fontFamily: 'serif'
-                        }}>
-                          {note || '-'}
-                        </div>
-                        <div className="text-amber-800 text-sm mb-4 font-semibold">
-                          {frequency > 0 ? `${frequency.toFixed(1)} Hz` : 'Listening for strings...'}
-                        </div>
-                        {closestString && (
-                          <div className="text-amber-900 text-xl font-bold" style={{fontFamily: 'serif'}}>
-                            {closestString}
-                          </div>
-                        )}
-                      </div>
-
-                      {frequency > 0 && (
-                        <div className="bg-gradient-to-br from-amber-200 to-yellow-200 rounded-2xl p-6 border-4 border-amber-900 shadow-inner">
-                          <div className={`text-3xl font-bold text-center mb-4 ${getTuningColor()}`} style={{
-                            textShadow: '1px 1px 2px rgba(255,255,255,0.5)',
-                            fontFamily: 'serif'
-                          }}>
-                            {getTuningMessage()}
-                          </div>
-                          
-                          <div className="relative h-4 bg-amber-900 rounded-full overflow-hidden border-2 border-amber-950 shadow-inner">
-                            <div 
-                              className="absolute top-0 h-full w-2 transition-all shadow-lg"
-                              style={{ 
-                                left: `${Math.max(0, Math.min(100, 50 + cents))}%`,
-                                backgroundColor: Math.abs(cents) < 5 ? '#16a34a' : Math.abs(cents) < 20 ? '#d97706' : '#b91c1c',
-                                transform: 'translateX(-50%)'
-                              }}
-                            />
-                            <div className="absolute top-0 left-1/2 h-full w-1 bg-yellow-300 shadow-lg" style={{transform: 'translateX(-50%)'}} />
-                          </div>
-                          
-                          <div className="flex justify-between text-xs text-amber-900 mt-2 font-bold">
-                            <span>♭ Flat</span>
-                            <span className="bg-amber-100 px-2 py-1 rounded">{cents > 0 ? '+' : ''}{cents} cents</span>
-                            <span>Sharp ♯</span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="bg-gradient-to-br from-yellow-100 to-amber-200 rounded-2xl p-5 border-4 border-amber-900 shadow-inner">
-                        <h3 className="text-amber-950 font-bold mb-3 text-center text-lg" style={{fontFamily: 'serif'}}>
-                          Standard Tuning
-                        </h3>
-                        <div className="space-y-2">
-                          {guitarStrings.map((string, idx) => (
-                            <div 
-                              key={idx}
-                              className={`flex justify-between text-sm p-3 rounded-lg border-2 transition-all ${
-                                closestString === string.string 
-                                  ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-yellow-50 border-amber-900 shadow-lg transform scale-105' 
-                                  : 'bg-amber-50 text-amber-900 border-amber-300'
-                              }`}
-                              style={{fontFamily: 'serif'}}
-                            >
-                              <span className="font-bold">{string.string}</span>
-                              <span className="font-semibold">{string.name} · {string.frequency.toFixed(2)} Hz</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {!isListening && !error && (
-                    <div className="text-center text-yellow-100 mt-8" style={{fontFamily: 'serif'}}>
-                      <p className="text-lg mb-2">Strum a string and let's tune up!</p>
-                      <p className="text-sm mt-2 opacity-80">Click the button above to get started</p>
-                      <p className="text-xs mt-4 opacity-60">Best results in a quiet campfire setting</p>
+                  {error && (
+                    <div className="mt-4 bg-red-900 border border-red-700 rounded-lg p-3 flex items-start">
+                      <AlertCircle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
+                      <p className="text-red-200 text-sm">{error}</p>
                     </div>
                   )}
                 </div>
