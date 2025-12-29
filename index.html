@@ -51,12 +51,12 @@
           const streamRef = useRef(null);
 
           const guitarStrings = [
-            { name: 'E', frequency: 82.41, string: 'E₂', position: 6, color: 'from-amber-100 to-amber-300' },
-            { name: 'A', frequency: 110.00, string: 'A₂', position: 5, color: 'from-yellow-100 to-yellow-300' },
-            { name: 'D', frequency: 146.83, string: 'D₃', position: 4, color: 'from-orange-100 to-orange-300' },
-            { name: 'G', frequency: 196.00, string: 'G₃', position: 3, color: 'from-red-100 to-red-300' },
-            { name: 'B', frequency: 246.94, string: 'B₃', position: 2, color: 'from-pink-100 to-pink-300' },
-            { name: 'E', frequency: 329.63, string: 'E₄', position: 1, color: 'from-purple-100 to-purple-300' }
+            { name: 'E', frequency: 82.41, string: 'E₂', position: 6, color: 'from-amber-100 to-amber-300', thickness: 'h-2' },
+            { name: 'A', frequency: 110.00, string: 'A₂', position: 5, color: 'from-yellow-100 to-yellow-300', thickness: 'h-1.5' },
+            { name: 'D', frequency: 146.83, string: 'D₃', position: 4, color: 'from-orange-100 to-orange-300', thickness: 'h-1.5' },
+            { name: 'G', frequency: 196.00, string: 'G₃', position: 3, color: 'from-red-100 to-red-300', thickness: 'h-1' },
+            { name: 'B', frequency: 246.94, string: 'B₃', position: 2, color: 'from-pink-100 to-pink-300', thickness: 'h-1' },
+            { name: 'E', frequency: 329.63, string: 'E₄', position: 1, color: 'from-purple-100 to-purple-300', thickness: 'h-0.5' }
           ];
 
           const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -225,7 +225,7 @@
           return (
             <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black flex flex-col" style={{minHeight: '100dvh'}}>
               {/* Top Control Section */}
-              <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 bordfer-b border-gray-700">
+              <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 border-b border-gray-700">
                 <div className="max-w-md mx-auto">
                   <div className="flex flex-col items-center space-y-4">
                     <h1 className="text-2xl font-bold text-white" style={{fontFamily: 'serif'}}>
@@ -382,29 +382,39 @@
                     <div className="absolute right-1/3 top-0 bottom-0 w-1 bg-amber-700"></div>
                     <div className="absolute right-8 top-0 bottom-0 w-1 bg-amber-700"></div>
                     
-                    <div className="space-y-4">
+                    {/* String position labels - on left side */}
+                    <div className="absolute -left-6 top-0 bottom-0 flex flex-col justify-around">
                       {guitarStrings.map((string, idx) => (
+                        <div key={idx} className="text-xs text-gray-300 font-bold">
+                          {string.position}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Guitar strings - EADGBE from bottom to top */}
+                    <div className="space-y-6">
+                      {guitarStrings.slice().reverse().map((string, idx) => (
                         <div key={idx} className="relative">
-                          {/* String line with gradient color */}
-                          <div className={`h-1.5 bg-gradient-to-r ${string.color} rounded-full relative`}>
+                          {/* String line with varying thickness */}
+                          <div className={`${string.thickness} bg-gradient-to-r ${string.color} rounded-full relative`}>
                             {/* String highlight */}
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-full"></div>
                           </div>
                           
-                          {/* Note button with indent based on position */}
+                          {/* Note button - positioned to the right */}
                           <div 
-                            className={`absolute -top-2 px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 shadow-lg border-2 ${
+                            className={`absolute -top-3 px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 shadow-lg border-2 ${
                               closestString === string.string
                                 ? 'bg-gradient-to-r from-amber-500 to-amber-700 text-white scale-105 shadow-amber-500/50 border-amber-300'
                                 : 'bg-gradient-to-r from-gray-700 to-gray-900 text-gray-300 border-gray-600'
                             }`}
                             style={{
-                              left: `${(string.position - 1) * 12 + 8}%`
+                              left: `${(6 - string.position) * 12 + 10}%` // Adjusted for reverse order
                             }}
                           >
                             <div className="flex flex-col items-center">
                               <span className="text-lg">{string.string}</span>
-                              <span className="text-xs opacity-80">{string.name}</span>
+                              <span className="text-xs opacity-80">{string.name} ({string.frequency.toFixed(0)} Hz)</span>
                             </div>
                           </div>
                         </div>
@@ -413,8 +423,12 @@
 
                     {/* Fretboard labels */}
                     <div className="flex justify-between mt-6 text-gray-300 text-sm">
-                      <span className="italic">Bridge</span>
-                      <span className="italic">Neck</span>
+                      <span className="italic">
+                        <span className="text-amber-400 font-bold">Bridge</span> (Thickest)
+                      </span>
+                      <span className="italic">
+                        <span className="text-amber-400 font-bold">Neck</span> (Thinnest)
+                      </span>
                     </div>
                   </div>
 
