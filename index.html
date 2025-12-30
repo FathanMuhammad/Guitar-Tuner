@@ -100,50 +100,6 @@
             return closest;
           };
 
-          // Improved autocorrelation with better noise handling
-          const autoCorrelate = (buffer, sampleRate) => {
-            const size = buffer.length;
-            const maxSamples = Math.floor(size / 2);
-            
-            // Compute RMS for silence detection
-            let rms = 0;
-            for (let i = 0; i < size; i++) {
-              rms += buffer[i] * buffer[i];
-            }
-            rms = Math.sqrt(rms / size);
-            
-            // Higher threshold for guitar (louder than speaking)
-            if (rms < 0.02) return -1;
-
-            // Find the best correlation
-            let bestOffset = -1;
-            let bestCorrelation = 0;
-            
-            for (let offset = 10; offset < maxSamples; offset++) {
-              let correlation = 0;
-              for (let i = 0; i < maxSamples; i++) {
-                correlation += Math.abs((buffer[i] - 0.5) - (buffer[i + offset] - 0.5));
-              }
-              correlation = 1 - (correlation / maxSamples);
-              
-              if (correlation > bestCorrelation) {
-                bestCorrelation = correlation;
-                bestOffset = offset;
-              }
-            }
-            
-            if (bestCorrelation > 0.2 && bestOffset !== -1) {
-              const frequency = sampleRate / bestOffset;
-              
-              // Guitar frequency range validation
-              if (frequency >= 70 && frequency <= 400) {
-                return frequency;
-              }
-            }
-            
-            return -1;
-          };
-
           // Advanced pitch detection using YIN algorithm (simplified)
           const detectPitchYIN = (buffer, sampleRate) => {
             const bufferLength = buffer.length;
@@ -335,17 +291,25 @@
 
           const needleRotation = Math.max(-50, Math.min(50, cents * 2));
           
-          // Calculate position for note wheel
-          const getNoteWheelPosition = () => {
-            if (!note || stableFrequency <= 0) return 50; // Center position
+          // Calculate position for note ruler (moving ruler, fixed center indicator)
+          const getNoteRulerPosition = () => {
+            if (!note || stableFrequency <= 0) return 0;
             
             const noteInfo = frequencyToNote(stableFrequency);
-            const targetFreq = findClosestString(stableFrequency).frequency;
-            const centsOffset = getCents(stableFrequency, targetFreq);
+            const targetNote = findClosestString(stableFrequency);
+            const centsOffset = getCents(stableFrequency, targetNote.frequency);
             
-            // Map cents to position: -50 to +50 cents maps to 0% to 100%
-            const position = 50 + (centsOffset * 0.5); // Each cent = 0.5% movement
-            return Math.max(0, Math.min(100, position));
+            // Find the index of the target note in the noteStrings array
+            const targetNoteIndex = noteStrings.indexOf(targetNote.name);
+            
+            // Start with the position that centers the target note
+            let basePosition = 50 - (targetNoteIndex * (100 / 12));
+            
+            // Adjust for cents offset (each cent moves the ruler slightly)
+            // 50 cents = semitone = one note position
+            const centsAdjustment = (centsOffset / 50) * (100 / 12);
+            
+            return basePosition + centsAdjustment;
           };
 
           return (
@@ -392,9 +356,9 @@
 
               {/* Analog Meter Section */}
               <div className="bg-gradient-to-b from-amber-100 to-amber-50 p-6 relative">
-                <div className="max-w-md mx-auto">
-                  {/* Red indicator light */}
-                  <div className="flex justify-center mb-4">
+                <div className="max-w-md mx-auto relative">
+                  {/* Indicator light positioned above needle anchor */}
+                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
                     <div className={`w-12 h-12 rounded-full border-4 border-gray-800 shadow-inner transition-all ${
                       isListening && Math.abs(cents) < 5 
                         ? 'bg-gradient-to-br from-green-400 to-green-600 shadow-green-500' 
@@ -463,92 +427,117 @@
                 </div>
               </div>
 
-              {/* Horizontal Note Wheel Section */}
+              {/* Ruler Note Display Section */}
               <div className="bg-gradient-to-b from-red-900 to-red-950 p-4">
                 <div className="max-w-md mx-auto">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="text-amber-200 italic font-serif">Note Wheel</div>
+                    <div className="text-amber-200 italic font-serif">Tuning Ruler</div>
                     <div className="text-amber-300 text-sm">
                       {stableFrequency > 0 ? `${stableFrequency.toFixed(1)} Hz` : 'Waiting for input...'}
                     </div>
                   </div>
                   
-                  {/* Note Wheel Container */}
-                  <div className="relative bg-gradient-to-r from-amber-900 via-amber-800 to-amber-900 rounded-xl p-2 border-4 border-amber-900 shadow-inner">
-                    {/* Center line */}
-                    <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-400 z-10 transform -translate-x-1/2"></div>
+                  {/* Ruler Container - Fixed Center, Moving Notes */}
+                  <div className="relative bg-gradient-to-r from-amber-900 via-amber-800 to-amber-900 rounded-xl p-4 border-4 border-amber-900 shadow-inner overflow-hidden">
+                    {/* Center Perfect Tune Indicator (Fixed) */}
+                    <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-gradient-to-t from-amber-400 via-amber-300 to-amber-400 z-20 transform -translate-x-1/2">
+                      <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 text-xs font-bold text-amber-300 bg-amber-900 px-2 py-1 rounded">
+                        PERFECT
+                      </div>
+                      <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs font-bold text-amber-300 bg-amber-900 px-2 py-1 rounded">
+                        CENTER
+                      </div>
+                    </div>
                     
-                    {/* Note markers */}
-                    <div className="relative h-8">
-                      {noteStrings.map((noteName, index) => {
-                        const position = (index / noteStrings.length) * 100;
-                        const isActive = note === noteName;
+                    {/* Ruler Scale Lines */}
+                    <div className="absolute top-0 bottom-0 left-0 right-0 flex items-center">
+                      {[...Array(25)].map((_, i) => {
+                        const position = (i * 4); // 0-100%
+                        const isCenter = position === 50;
+                        const isMajor = i % 3 === 0;
                         
                         return (
                           <div 
-                            key={noteName}
-                            className={`absolute top-0 bottom-0 flex flex-col items-center justify-center transition-all duration-300 ${
-                              isActive ? 'z-20' : 'z-0'
-                            }`}
-                            style={{ left: `${position}%` }}
-                          >
-                            {/* Note label */}
-                            <div className={`text-center transition-all duration-300 ${
-                              isActive 
-                                ? 'text-4xl font-bold text-amber-200' 
-                                : 'text-lg text-amber-100'
-                            }`} style={{fontFamily: 'serif'}}>
-                              {noteName}
-                            </div>
-                            
-                            {/* Octave indicator */}
-                            {isActive && stableFrequency > 0 && (
-                              <div className="text-xs text-amber-400 mt-1">
-                                Octave {frequencyToNote(stableFrequency).octave}
-                              </div>
-                            )}
-                          </div>
+                            key={i}
+                            className={`absolute ${
+                              isCenter ? 'bg-amber-400' : 
+                              isMajor ? 'bg-amber-300' : 'bg-amber-200/50'
+                            } ${isCenter ? 'w-0.5 h-8' : isMajor ? 'w-0.5 h-6' : 'w-0.5 h-4'}`}
+                            style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                          ></div>
                         );
                       })}
-                      
-                      {/* Current note indicator */}
-                      {note && stableFrequency > 0 && (
-                        <div 
-                          className="absolute top-0 bottom-0 w-2 bg-gradient-to-t from-amber-400 to-amber-600 rounded-full shadow-lg transform -translate-x-1/2"
-                          style={{ 
-                            left: `${getNoteWheelPosition()}%`,
-                            transition: 'left 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
-                          }}
-                        ></div>
-                      )}
                     </div>
                     
-                    {/* Frequency scale */}
-                    <div className="mt-4 pt-2 border-t border-amber-800">
-                      <div className="flex justify-between text-amber-600 text-xs">
-                        <span>Low</span>
-                        <span className="text-amber-400">Perfect Tune</span>
-                        <span>High</span>
+                    {/* Moving Notes Ruler */}
+                    <div 
+                      className="relative h-16 transition-all duration-300 ease-out"
+                      style={{ transform: `translateX(${getNoteRulerPosition()}%)` }}
+                    >
+                      {[...Array(3)].map((_, segment) => (
+                        <div key={segment} className="absolute top-0 bottom-0 flex items-center justify-between">
+                          {noteStrings.map((noteName, index) => {
+                            const position = (segment * 1200) + (index * 100);
+                            const isActive = note === noteName;
+                            
+                            return (
+                              <div 
+                                key={`${segment}-${noteName}`}
+                                className={`absolute flex flex-col items-center transition-all duration-200 ${
+                                  isActive ? 'z-10 scale-125' : 'z-0'
+                                }`}
+                                style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                              >
+                                <div className={`text-center font-bold ${
+                                  isActive 
+                                    ? 'text-2xl text-amber-200' 
+                                    : segment === 1 ? 'text-lg text-amber-100' : 'text-sm text-amber-100/50'
+                                }`} style={{fontFamily: 'serif'}}>
+                                  {noteName}
+                                </div>
+                                
+                                {/* Frequency markers for major notes */}
+                                {isActive && stableFrequency > 0 && segment === 1 && (
+                                  <div className="absolute -bottom-6 text-xs text-amber-400">
+                                    {findClosestString(stableFrequency).frequency.toFixed(1)} Hz
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Center Note Display */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
+                      <div className="bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 rounded-xl p-3 border-4 border-amber-900 shadow-lg flex flex-col items-center min-w-[100px]">
+                        <div className="text-amber-900 font-serif italic text-sm">Center Note</div>
+                        <div className="text-4xl font-bold text-amber-900" style={{fontFamily: 'serif'}}>
+                          {note || '--'}
+                        </div>
+                        {closestString && (
+                          <div className="text-amber-800 font-semibold text-sm">
+                            {closestString}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Current note display */}
-                  <div className="mt-4 bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 rounded-xl p-4 border-4 border-amber-900 flex items-center justify-between shadow-inner">
-                    <div className="text-amber-900 font-serif italic">Current Note:</div>
-                    <div className="text-5xl font-bold text-amber-900" style={{fontFamily: 'serif'}}>
-                      {note || '--'}
+                  {/* Cent Marks */}
+                  <div className="mt-4 pt-2">
+                    <div className="flex justify-between text-amber-600 text-xs mb-1">
+                      <span>-50¢</span>
+                      <span className="text-amber-400 font-bold">0¢ Perfect</span>
+                      <span>+50¢</span>
                     </div>
-                    <div className="text-amber-800 font-semibold text-lg">
-                      {closestString || ''}
+                    <div className="h-2 bg-gradient-to-r from-red-400 via-yellow-400 to-green-400 rounded-full relative">
+                      <div 
+                        className="absolute top-0 bottom-0 w-1 bg-amber-900 transform -translate-x-1/2 shadow-lg"
+                        style={{ left: `${50 + (cents)}%` }}
+                      ></div>
                     </div>
-                  </div>
-
-                  {/* Decorative dots */}
-                  <div className="flex justify-center gap-2 mt-4">
-                    {[...Array(15)].map((_, i) => (
-                      <div key={i} className={`w-2 h-2 rounded-full ${isListening ? 'bg-amber-400' : 'bg-gray-600'}`}></div>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -563,8 +552,6 @@
                     <div className="absolute left-1/3 top-0 bottom-0 w-1 bg-amber-700"></div>
                     <div className="absolute right-1/3 top-0 bottom-0 w-1 bg-amber-700"></div>
                     <div className="absolute right-8 top-0 bottom-0 w-1 bg-amber-700"></div>
-                    
-                    
                     
                     {/* Guitar strings - EADGBE from bottom to top */}
                     <div className="space-y-6">
@@ -633,7 +620,7 @@
                     <div className="mt-10 text-center text-gray-400 text-sm">
                       <p>Click "Start Tuning" above and play a string</p>
                       <p className="mt-1">Tune until the needle is centered and light turns green</p>
-                      <p className="mt-1">Note wheel shows your pitch relative to perfect tuning</p>
+                      <p className="mt-1">Ruler moves to show pitch relative to perfect tuning</p>
                     </div>
                   )}
                 </div>
